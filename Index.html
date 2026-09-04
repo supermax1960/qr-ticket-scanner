@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Сканер билетов</title>
+
+  <style>
+    body {
+      margin: 0;
+      padding: 20px 16px;
+      font-family: Arial, sans-serif;
+      text-align: center;
+      font-size: 20px;
+    }
+
+    h1 {
+      font-size: 28px;
+    }
+
+    #reader {
+      width: 100%;
+      max-width: 500px;
+      margin: 20px auto;
+    }
+
+    #result {
+      margin-top: 20px;
+      font-weight: bold;
+      word-break: break-word;
+      white-space: pre-line;
+    }
+
+    button {
+      width: 100%;
+      max-width: 500px;
+      padding: 16px;
+      margin-top: 15px;
+      font-size: 21px;
+      font-weight: bold;
+      border: none;
+      border-radius: 10px;
+    }
+
+    #count {
+      width: 85px;
+      height: 52px;
+      font-size: 25px;
+      text-align: center;
+      border: 2px solid #777;
+      border-radius: 8px;
+      padding: 4px;
+      box-sizing: border-box;
+    }
+
+    .history {
+      margin-top: 25px;
+      text-align: left;
+      font-size: 18px;
+      font-weight: normal;
+    }
+
+    .history-title {
+      text-align: center;
+      font-size: 22px;
+      font-weight: bold;
+      margin-bottom: 15px;
+    }
+
+    .history-row {
+      margin: 9px 0;
+    }
+
+    .total-passed {
+      margin-top: 22px;
+      font-size: 21px;
+      font-weight: bold;
+      text-align: center;
+    }
+
+    .fully-used {
+      margin-top: 22px;
+      font-size: 22px;
+      font-weight: bold;
+      text-align: center;
+    }
+  </style>
+</head>
+
+<body>
+
+  <h1>СКАНЕР БИЛЕТОВ</h1>
+
+  <button id="startButton" onclick="startScanner()">
+    ЗАПУСТИТЬ КАМЕРУ
+  </button>
+
+  <div id="reader"></div>
+
+  <div id="result">
+    Камера ещё не запущена.
+  </div>
+
+
+  <script src="https://unpkg.com/html5-qrcode"></script>
+
+  <script>
+
+    const APPS_SCRIPT_URL =
+      'https://script.google.com/macros/s/AKfycbxsQUUlocfc_3GQQaYUUW4CPpP83RwW-PMrr5egWk96OgddbF33DdivrdyMooPZEZj6/exec';
+
+
+    let scanner = null;
+    let scanning = false;
+
+
+    function startScanner() {
+
+      if (scanning) {
+        return;
+      }
+
+      scanning = true;
+
+      document.getElementById('startButton').style.display =
+        'none';
+
+      document.getElementById('result').innerText =
+        'Запрашиваю доступ к камере...';
+
+
+      scanner = new Html5Qrcode('reader');
+
+
+      scanner.start(
+        { facingMode: 'environment' },
+
+        {
+          fps: 10,
+          qrbox: {
+            width: 250,
+            height: 250
+          }
+        },
+
+        function(decodedText) {
+
+          if (!scanning) {
+            return;
+          }
+
+          scanning = false;
+
+          scanner.stop().catch(function() {});
+
+
+          const token =
+            String(decodedText || '').trim();
+
+
+          if (!token) {
+
+            document.getElementById('result').innerText =
+              'QR РАСПОЗНАН, НО ДАННЫЕ НЕ НАЙДЕНЫ.';
+
+            document.getElementById('startButton').style.display =
+              'block';
+
+            scanning = false;
+
+            return;
+          }
+
+
+          document.getElementById('result').innerText =
+            'QR РАСПОЗНАН.\n\nПОЛУЧАЮ ДАННЫЕ БИЛЕТА...';
+
+
+          getTicket(token);
+        },
+
+        function() {
+          // QR пока не найден.
+        }
+      )
+
+      .then(function() {
+
+        document.getElementById('result').innerText =
+          'КАМЕРА РАБОТАЕТ.\n\nНаведите её на QR-код.';
+      })
+
+      .catch(function(error) {
+
+        scanning = false;
+
+        document.getElementById('startButton').style.display =
+          'block';
+
+        document.getElementById('result').innerText =
+          'ОШИБКА КАМЕРЫ: ' + error;
+      });
+    }
+
+
+    function getTicket(token) {
+
+      const callbackName =
+        'getTicketCallback_' + Date.now();
+
+
+      const url =
+        APPS_SCRIPT_URL +
+        '?action=getTicket' +
+        '&token=' +
+        encodeURIComponent(token) +
+        '&callback=' +
+        encodeURIComponent(callbackName);
+
+
+      let finished = false;
+
+
+      window[callbackName] = function(data) {
+
+        if (finished) {
+          return;
+        }
+
+        finished = true;
+
+
+        cleanup();
+
+
+        if (!data || !data.success) {
+
+          /*
+           * Полностью использованный билет.
+           */
+          if (
+            data &&
+            data.fullyUsed
+          ) {
+
+            showFullyUsedTicket(data);
+
+            return;
+          }
+
+
+          document.getElementById('result').innerText =
+            data && data.message
+              ? data.message
+              : 'Билет не найден.';
+
+          showRestartButton();
+
+          return;
+        }
+
+
+        showTicket(data);
+      };
+
+
+      const script =
+        document.createElement('script');
+
+
+      script.src = url;
+
+
+      script.onerror = function() {
+
+        if (finished) {
+          return;
+        }
+
+        finished = true;
+
+        cleanup();
+
+        document.getElementById('result').innerText =
+          'ОШИБКА ЗАГРУЗКИ ОТВЕТА СЕРВЕРА.';
+
+        showRestartButton();
+      };
+
+
+      document.body.appendChild(script);
+
+
+      const timeout =
+        setTimeout(function() {
+
+          if (finished) {
+            return;
+          }
+
+          finished = true;
+
+          cleanup();
+
+          document.getElementById('result').innerText =
+            'СЕРВЕР НЕ ВЫЗВАЛ CALLBACK.';
+
+          showRestartButton();
+
+        }, 15000);
+
+
+      function cleanup() {
+
+        clearTimeout(timeout);
+
+        delete window[callbackName];
+
+        if (script.parentNode) {
+          script.parentNode.removeChild(script);
+        }
+      }
+    }
+
+
+    /*
+     * Экран полностью использованного билета.
+     */
+    function showFullyUsedTicket(data) {
+
+      let html = '';
+
+
+      html +=
+        '<div style="font-size:26px;margin-bottom:20px;">' +
+        'БИЛЕТ № ' +
+        escapeHtml(data.ticketNumber) +
+        '</div>';
+
+
+      html +=
+        '<div style="margin:12px 0;">' +
+        'Имя: <strong>' +
+        escapeHtml(data.name) +
+        '</strong></div>';
+
+
+      html +=
+        '<div style="margin:12px 0;">' +
+        'Гостей: <strong>' +
+        data.total +
+        '</strong></div>';
+
+
+      html +=
+        '<div class="history">';
+
+
+      html +=
+        '<div class="history-title">' +
+        'ИСТОРИЯ ПРОХОДОВ' +
+        '</div>';
+
+
+      if (
+        data.history &&
+        data.history.length > 0
+      ) {
+
+        for (
+          let i = 0;
+          i < data.history.length;
+          i++
+        ) {
+
+          const item =
+            data.history[i];
+
+
+          html +=
+            '<div class="history-row">' +
+            escapeHtml(item.dateTime) +
+            ' — ' +
+            item.passed +
+            ' ' +
+            visitorWord(item.passed) +
+            '</div>';
+        }
+
+      } else {
+
+        html +=
+          '<div class="history-row" ' +
+          'style="text-align:center;">' +
+          'Записей о проходах не найдено.' +
+          '</div>';
+      }
+
+
+      html +=
+        '</div>';
+
+
+      html +=
+        '<div class="total-passed">' +
+        'ИТОГО ПРОШЛО: ' +
+        data.totalPassed +
+        ' ' +
+        visitorWord(data.totalPassed) +
+        '</div>';
+
+
+      html +=
+        '<div style="margin-top:15px;font-size:21px;font-weight:bold;">' +
+        'Осталось: 0' +
+        '</div>';
+
+
+      html +=
+        '<div class="fully-used">' +
+        'БИЛЕТ ПОЛНОСТЬЮ ИСПОЛЬЗОВАН' +
+        '</div>';
+
+
+      html +=
+        '<button id="newScanButton" ' +
+        'onclick="restartScanner()">' +
+        'СКАНИРОВАТЬ СЛЕДУЮЩИЙ БИЛЕТ' +
+        '</button>';
+
+
+      document.getElementById('result').innerHTML =
+        html;
+    }
+
+
+    function visitorWord(number) {
+
+      number = Math.abs(Number(number));
+
+
+      const lastTwo =
+        number % 100;
+
+
+      const last =
+        number % 10;
+
+
+      if (
+        lastTwo >= 11 &&
+        lastTwo <= 14
+      ) {
+        return 'человек';
+      }
+
+
+      if (last === 1) {
+        return 'человек';
+      }
+
+
+      if (
+        last >= 2 &&
+        last <= 4
+      ) {
+        return 'человека';
+      }
+
+
+      return 'человек';
+    }
+
+
+function showTicket(data) {
+
+  window.currentToken =
+    data.token;
+
+  window.currentScanId =
+    data.scanId;
+
+
+  let html =
+    '<div style="font-size:26px;margin-bottom:20px;">' +
+    'БИЛЕТ № ' +
+    escapeHtml(data.ticketNumber) +
+    '</div>';
+
+
+  html +=
+    '<div style="margin:12px 0;">' +
+    'Имя: <strong>' +
+    escapeHtml(data.name) +
+    '</strong></div>';
+
+
+  html +=
+    '<div style="margin:12px 0;">' +
+    'Количество человек: <strong>' +
+    data.total +
+    '</strong></div>';
+
+
+  html +=
+    '<div id="remaining" ' +
+    'style="font-size:25px;font-weight:bold;margin:22px 0;">' +
+    'Доступно при входе: ' +
+    data.remaining +
+    '</div>';
+
+
+  if (Number(data.remaining) <= 0) {
+
+    html +=
+      '<div style="font-size:23px;font-weight:bold;">' +
+      'БИЛЕТ ПОЛНОСТЬЮ ИСПОЛЬЗОВАН' +
+      '</div>';
+
+    html +=
+      '<button id="newScanButton" ' +
+      'onclick="restartScanner()">' +
+      'СКАНИРОВАТЬ СЛЕДУЮЩИЙ БИЛЕТ' +
+      '</button>';
+
+  }
+
+  else if (Number(data.remaining) === 1) {
+
+    html +=
+      '<button id="passButton" ' +
+      'onclick="passSingle()">' +
+      'ПРОПУСТИТЬ' +
+      '</button>';
+
+
+    html +=
+      '<div id="actionResult" ' +
+      'style="margin-top:24px;font-size:22px;font-weight:bold;white-space:pre-line;">' +
+      '</div>';
+
+
+    html +=
+      '<button id="newScanButton" ' +
+      'onclick="restartScanner()" ' +
+      'style="display:none;">' +
+      'СКАНИРОВАТЬ СЛЕДУЮЩИЙ БИЛЕТ' +
+      '</button>';
+
+  }
+
+  else {
+
+    html +=
+'\<div id="countRow" style="margin:24px 0;">' +
+
+      '<label ' +
+      'style="display:block;margin-bottom:10px;">' +
+      'Сейчас пришло:' +
+      '</label>' +
+
+      '<input ' +
+      'type="number" ' +
+      'id="count" ' +
+      'min="1" ' +
+      'max="' + data.remaining + '" ' +
+      'inputmode="numeric">' +
+
+      '</div>';
+
+
+    html +=
+      '<button id="passButton" ' +
+      'onclick="passGroup()">' +
+      'ПРОПУСТИТЬ' +
+      '</button>';
+
+
+    html +=
+      '<div id="actionResult" ' +
+      'style="margin-top:24px;font-size:22px;font-weight:bold;white-space:pre-line;">' +
+      '</div>';
+
+
+    html +=
+      '<button id="newScanButton" ' +
+      'onclick="restartScanner()" ' +
+      'style="display:none;">' +
+      'СКАНИРОВАТЬ СЛЕДУЮЩИЙ БИЛЕТ' +
+      '</button>';
+  }
+
+
+  document.getElementById('result').innerHTML =
+    html;
+}
+
+
+
+    function passSingle() {
+
+      const button =
+        document.getElementById('passButton');
+
+      const result =
+        document.getElementById('actionResult');
+
+
+      button.disabled = true;
+
+      result.innerText =
+        'Оформляю вход...';
+
+
+      processEntry(1);
+    }
+
+
+    function passGroup() {
+
+      const input =
+        document.getElementById('count');
+
+
+      const count =
+        Number(input.value);
+
+
+      const maxCount =
+        Number(input.max);
+
+
+      if (
+        !Number.isInteger(count) ||
+        count < 1 ||
+        count > maxCount
+      ) {
+
+        document.getElementById('actionResult').innerText =
+          'Введите целое число от 1 до ' +
+          maxCount +
+          '.';
+
+        return;
+      }
+
+
+      document.getElementById('passButton').disabled =
+        true;
+
+
+      document.getElementById('actionResult').innerText =
+        'Оформляю вход...';
+
+
+      processEntry(count);
+    }
+
+
+function processEntry(count) {
+
+  const scanId =
+    window.currentScanId;
+
+
+  const callbackName =
+    'processEntryCallback_' + Date.now();
+
+
+  const url =
+    APPS_SCRIPT_URL +
+    '?action=processEntry' +
+    '&scanId=' +
+    encodeURIComponent(scanId) +
+    '&count=' +
+    encodeURIComponent(count) +
+    '&callback=' +
+    encodeURIComponent(callbackName);
+
+
+  let finished = false;
+
+
+  window[callbackName] = function(data) {
+
+    if (finished) {
+      return;
+    }
+
+    finished = true;
+
+    cleanup();
+
+
+    if (data && data.success) {
+
+      /*
+       * Верхнюю строку "Доступно при входе"
+       * специально НЕ меняем.
+       *
+       * Она показывает остаток,
+       * который был доступен при сканировании.
+       */
+
+
+      const countRow =
+        document.getElementById('countRow');
+
+      if (countRow) {
+        countRow.style.display = 'none';
+      }
+
+
+      const passButton =
+        document.getElementById('passButton');
+
+      if (passButton) {
+        passButton.style.display = 'none';
+      }
+
+
+      document.getElementById('actionResult').innerText =
+        'ПРОПУЩЕНО: ' +
+        data.passed +
+        '\n\nОсталось: ' +
+        data.remaining;
+
+
+      const newScanButton =
+        document.getElementById('newScanButton');
+
+      if (newScanButton) {
+        newScanButton.style.display = 'block';
+      }
+
+
+    } else {
+
+      const passButton =
+        document.getElementById('passButton');
+
+      if (passButton) {
+        passButton.disabled = false;
+      }
+
+
+      document.getElementById('actionResult').innerText =
+        data && data.message
+          ? data.message
+          : 'Не удалось оформить вход.';
+
+
+      if (
+        data &&
+        data.message &&
+        (
+          data.message.indexOf('устарело') !== -1 ||
+          data.message.indexOf('уже использовано') !== -1 ||
+          data.message.indexOf('не существует') !== -1
+        )
+      ) {
+
+        showRestartButton();
+      }
+    }
+  };
+
+
+  const script =
+    document.createElement('script');
+
+
+  script.src = url;
+
+
+  script.onerror = function() {
+
+    if (finished) {
+      return;
+    }
+
+    finished = true;
+
+    cleanup();
+
+
+    const passButton =
+      document.getElementById('passButton');
+
+    if (passButton) {
+      passButton.disabled = false;
+    }
+
+
+    document.getElementById('actionResult').innerText =
+      'ОШИБКА ЗАГРУЗКИ ОТВЕТА СЕРВЕРА.';
+  };
+
+
+  document.body.appendChild(script);
+
+
+  const timeout =
+    setTimeout(function() {
+
+      if (finished) {
+        return;
+      }
+
+      finished = true;
+
+      cleanup();
+
+
+      const passButton =
+        document.getElementById('passButton');
+
+      if (passButton) {
+        passButton.disabled = false;
+      }
+
+
+      document.getElementById('actionResult').innerText =
+        'СЕРВЕР НЕ ВЫЗВАЛ CALLBACK.';
+
+    }, 15000);
+
+
+  function cleanup() {
+
+    clearTimeout(timeout);
+
+    delete window[callbackName];
+
+    if (script.parentNode) {
+      script.parentNode.removeChild(script);
+    }
+  }
+}
+
+
+    function showRestartButton() {
+
+      let button =
+        document.getElementById('newScanButton');
+
+
+      if (!button) {
+
+        button =
+          document.createElement('button');
+
+        button.id =
+          'newScanButton';
+
+        button.innerText =
+          'СКАНИРОВАТЬ СЛЕДУЮЩИЙ БИЛЕТ';
+
+        button.onclick =
+          restartScanner;
+
+        document.getElementById('result')
+          .appendChild(button);
+
+      } else {
+
+        button.style.display =
+          'block';
+      }
+    }
+
+
+    function restartScanner() {
+
+      window.location.reload();
+    }
+
+
+    function escapeHtml(value) {
+
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+  </script>
+
+</body>
+</html>
