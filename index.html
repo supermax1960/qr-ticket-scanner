@@ -504,11 +504,13 @@ if (
   data.history.length > 0
 ) {
 
-  html +=
-    '<button id="historyButton" ' +
-    'onclick="toggleHistory()">' +
-    'ИСТОРИЯ ПРОХОДОВ' +
-    '</button>';
+html +=
+  '<button id="historyButton" ' +
+  'onclick="toggleHistory()" ' +
+  'style="position:fixed;left:10px;bottom:10px;' +
+  'width:160px;height:44px;padding:0;font-size:14px;">' +
+  'ИСТОРИЯ ПРОХОДОВ' +
+  '</button>';
 
   html +=
     '<div id="historyBlock" ' +
