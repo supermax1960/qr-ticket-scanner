@@ -118,9 +118,6 @@
 
       scanning = true;
 
-      document.getElementById('startButton').style.display =
-        'none';
-
       document.getElementById('result').innerText =
         'Запрашиваю доступ к камере...';
 
@@ -159,9 +156,6 @@
             document.getElementById('result').innerText =
               'QR РАСПОЗНАН, НО ДАННЫЕ НЕ НАЙДЕНЫ.';
 
-            document.getElementById('startButton').style.display =
-              'block';
-
             scanning = false;
 
             return;
@@ -189,9 +183,6 @@
       .catch(function(error) {
 
         scanning = false;
-
-        document.getElementById('startButton').style.display =
-          'block';
 
         document.getElementById('result').innerText =
           'ОШИБКА КАМЕРЫ: ' + error;
