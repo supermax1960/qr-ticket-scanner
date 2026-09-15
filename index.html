@@ -733,6 +733,16 @@ function toggleHistory() {
 
 function processEntry(count) {
 
+  window.entryUnresolved = true;
+
+  const cancelButton =
+    document.getElementById('cancelScanButton');
+
+  if (cancelButton) {
+    cancelButton.disabled = true;
+    cancelButton.style.opacity = '0.4';
+  }
+
   const scanId =
     window.currentScanId;
 
@@ -767,6 +777,15 @@ function processEntry(count) {
 
 
     if (data && data.success) {
+
+      window.entryUnresolved = false;
+
+  const cancelButton =
+    document.getElementById('cancelScanButton');
+
+  if (cancelButton) {
+    cancelButton.style.display = 'none';
+  }
 
       /*
        * Верхнюю строку "Доступно при входе"
@@ -946,9 +965,22 @@ function processEntry(count) {
 
     function restartScanner() {
 
-      window.location.reload();
+  if (window.entryUnresolved) {
+    const result =
+      document.getElementById('actionResult');
+
+    if (result) {
+      result.innerText =
+        'Результат прохода пока не подтверждён.\n' +
+        'Нажмите «ПРОПУСТИТЬ» повторно, ' +
+        'чтобы получить результат.';
     }
 
+    return;
+  }
+
+  window.location.reload();
+}
 
 function escapeHtml(value) {
 
