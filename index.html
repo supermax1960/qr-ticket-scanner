@@ -733,8 +733,20 @@ function toggleHistory() {
 
 function processEntry(count) {
 
+  if (!window.entryUnresolved) {
+    window.pendingEntryCount = count;
+  }
+
+  count = window.pendingEntryCount;
   window.entryUnresolved = true;
 
+  const countInput =
+    document.getElementById('count');
+
+  if (countInput) {
+    countInput.value = count;
+    countInput.disabled = true;
+  }
   const cancelButton =
     document.getElementById('cancelScanButton');
 
