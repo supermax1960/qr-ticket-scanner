@@ -767,7 +767,13 @@ function processEntry(count) {
 
 
     if (data && data.success) {
+      const cancelButton =
+    document.getElementById('cancelScanButton');
 
+  if (cancelButton) {
+    cancelButton.style.display = 'none';
+  }
+      
       /*
        * Верхнюю строку "Доступно при входе"
        * специально НЕ меняем.
