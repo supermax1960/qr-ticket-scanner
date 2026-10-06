@@ -231,6 +231,7 @@
           ) {
 
             showFullyUsedTicket(data);
+            showNotes(data.notes);
 
             return;
           }
@@ -242,12 +243,14 @@
               : 'Билет не найден.';
 
           showRestartButton();
+          showNotes(data && data.notes);
 
           return;
         }
 
 
         showTicket(data);
+        showNotes(data.notes);
       };
 
 
@@ -761,6 +764,7 @@ function processEntry(count) {
     finished = true;
 
     cleanup();
+    if (data && Object.prototype.hasOwnProperty.call(data, 'notes')) showNotes(data.notes);
 
 
     if (data && data.success) {
@@ -952,6 +956,36 @@ function processEntry(count) {
       window.location.reload();
     }
 
+
+
+function showNotes(value) {
+  const old = document.getElementById('notesPanel');
+  if (old) old.remove();
+  const notes = String(value || '').trim();
+  if (!notes) return;
+  const panel = document.createElement('div');
+  panel.id = 'notesPanel';
+  panel.style.marginBottom = '70px';
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.innerText = 'ПРИМЕЧАНИЯ';
+  button.setAttribute('aria-expanded', 'false');
+  const text = document.createElement('div');
+  text.hidden = true;
+  text.style.whiteSpace = 'pre-wrap';
+  text.style.textAlign = 'left';
+  text.style.fontWeight = 'normal';
+  text.style.marginTop = '16px';
+  text.textContent = notes;
+  button.onclick = function() {
+    text.hidden = !text.hidden;
+    button.innerText = text.hidden ? 'ПРИМЕЧАНИЯ' : 'СКРЫТЬ ПРИМЕЧАНИЯ';
+    button.setAttribute('aria-expanded', String(!text.hidden));
+  };
+  panel.appendChild(button);
+  panel.appendChild(text);
+  document.getElementById('result').appendChild(panel);
+}
 
 function escapeHtml(value) {
 
